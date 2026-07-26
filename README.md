@@ -55,7 +55,7 @@ python -m pip install ok-script
 ### 从源码安装（开发者）
 
 ```bash
-git clone https://github.com/ok-oldking/ok-script.git
+git clone https://github.com/hjs12345678900/ok-script.git
 cd ok-script
 python3.12 -m venv .venv
 
