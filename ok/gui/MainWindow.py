@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 
 import pyappify
@@ -193,7 +194,10 @@ class MainWindow(FluentWindow):
         communicate.task_list_updated.connect(self.update_imported_tabs)
 
         # 添加计划任务Tab
-        any_support_schedule = any(task.support_schedule_task for task in visible_onetime_tasks)
+        any_support_schedule = (
+            sys.platform == "win32"
+            and any(task.support_schedule_task for task in visible_onetime_tasks)
+        )
         if any_support_schedule:
             from ok.gui.tasks.ScheduleTaskTab import ScheduleTaskTab
             self.schedule_tab = ScheduleTaskTab(config=self.config)
@@ -252,6 +256,9 @@ class MainWindow(FluentWindow):
     @staticmethod
     def _get_dwm_accent_color():
         """Return the DWM accent color as a compatibility fallback."""
+        if sys.platform != "win32":
+            return None
+
         try:
             import ctypes
             from ctypes import wintypes
@@ -276,6 +283,9 @@ class MainWindow(FluentWindow):
 
     def get_system_primary_theme_color(self):
         """Return a qfluent source color matching the Windows primary fill."""
+        if sys.platform != "win32":
+            return None
+
         dark = isDarkTheme()
         try:
             from ok.rotypes.Windows.UI.ViewManagement import UIColorType, get_color_value
@@ -302,14 +312,15 @@ class MainWindow(FluentWindow):
         logger.info(f'System primary button color applied: {color.name()}')
 
     def nativeEvent(self, event_type, message):
-        try:
-            from ctypes import wintypes
+        if sys.platform == "win32":
+            try:
+                from ctypes import wintypes
 
-            native_message = wintypes.MSG.from_address(int(message))
-            if native_message.message == 0x0320:
-                QTimer.singleShot(0, self._sync_system_accent_color)
-        except (TypeError, ValueError):
-            logger.exception('Failed to process Windows accent color change')
+                native_message = wintypes.MSG.from_address(int(message))
+                if native_message.message == 0x0320:
+                    QTimer.singleShot(0, self._sync_system_accent_color)
+            except (TypeError, ValueError):
+                logger.exception('Failed to process Windows accent color change')
 
         return super().nativeEvent(event_type, message)
 

@@ -1,7 +1,8 @@
 import sys
 from enum import IntEnum
 
-import win32gui
+if sys.platform == "win32":
+    import win32gui
 
 class ImageShape(IntEnum):
     Y = 0

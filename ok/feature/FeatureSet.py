@@ -211,6 +211,11 @@ class FeatureSet:
                          screenshot=False, limit=0, target_height=0):
         import time
         start_time = time.time()
+        if mat is None:
+            logger.warning(
+                f"FeatureSet: skip {category_name} because capture returned no frame"
+            )
+            return []
         self.check_size(mat)
         check_size_time = time.time()
 

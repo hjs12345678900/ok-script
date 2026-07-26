@@ -1,4 +1,7 @@
-import win32con
+import sys
+
+if sys.platform == "win32":
+    import win32con
 
 PYDIRECT_KEY_MAP = {
     'alt_l': 'altleft',
@@ -102,7 +105,7 @@ vk_key_dict = {
     'CMD_R': win32con.VK_RWIN,
     'META': win32con.VK_LWIN,
     # Add more keys as needed
-}
+} if sys.platform == "win32" else {}
 
 
 

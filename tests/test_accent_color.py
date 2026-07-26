@@ -1,10 +1,13 @@
 import colorsys
+import sys
 import unittest
+from unittest.mock import patch
 
 from ok.gui.common.accent_color import (
     QFLUENT_DARK_SATURATION_FACTOR,
     qfluent_theme_source_color,
 )
+from ok.gui.MainWindow import MainWindow
 
 
 def _render_qfluent_dark_primary(rgb):
@@ -18,6 +21,13 @@ def _render_qfluent_dark_primary(rgb):
 
 
 class TestAccentColor(unittest.TestCase):
+
+    def test_non_windows_platform_skips_windows_accent_apis(self):
+        with patch.object(sys, "platform", "darwin"):
+            self.assertIsNone(MainWindow._get_dwm_accent_color())
+            self.assertIsNone(
+                MainWindow.get_system_primary_theme_color(object())
+            )
 
     def test_light_theme_uses_system_fill_without_compensation(self):
         self.assertEqual(

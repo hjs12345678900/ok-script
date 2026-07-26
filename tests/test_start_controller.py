@@ -131,6 +131,34 @@ class TestStartController(unittest.TestCase):
         )
         self.assertEqual('GPU Driver Warning', title)
 
+    def test_do_start_activates_interaction_before_executor(self):
+        controller = self.make_controller()
+        controller.start_exe = True
+        controller.start_device = Mock(return_value=True)
+        controller.check_gpu_driver_post_processing = Mock()
+        call_order = []
+        interaction = Mock()
+        interaction.on_run.side_effect = lambda: call_order.append("activate") or True
+        executor = Mock()
+        executor.interaction = interaction
+        executor.get_all_tasks.return_value = []
+        executor.start.side_effect = lambda: call_order.append("start")
+        device_manager = Mock()
+        fake_og = SimpleNamespace(
+            device_manager=device_manager,
+            executor=executor,
+        )
+        fake_communicate = SimpleNamespace(
+            starting_emulator=SimpleNamespace(emit=Mock()),
+        )
+
+        with patch.object(start_controller_module, "og", fake_og), \
+                patch.object(start_controller_module, "communicate", fake_communicate):
+            self.assertTrue(controller.do_start())
+
+        self.assertEqual(["activate", "start"], call_order)
+        interaction.on_run.assert_called_once_with()
+
 
 if __name__ == '__main__':
     unittest.main()

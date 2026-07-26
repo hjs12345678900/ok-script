@@ -35,17 +35,18 @@ setuptools.setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Operating System :: Microsoft :: Windows",
+        "Operating System :: MacOS :: MacOS X",
     ],
     install_requires=[
-        'pywin32>=306',
+        'pywin32>=306; sys_platform == "win32"',
         'pyappify>=1.0.6',
         'PySide6-Fluent-Widgets>=1.8.3',
         'typing-extensions>=4.11.0',
         'requests>=2.32.3',
         'psutil>=6.0.0',
-        'pydirectinput==1.0.4',
-        'pycaw==20240210',
-        'mouse==0.7.1'
+        'pydirectinput==1.0.4; sys_platform == "win32"',
+        'pycaw==20240210; sys_platform == "win32"',
+        'mouse==0.7.1; sys_platform == "win32"'
     ],
     entry_points={
         'console_scripts': [

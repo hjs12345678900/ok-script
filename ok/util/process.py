@@ -3,9 +3,11 @@ import argparse
 import ctypes
 import glob
 import hashlib
+import ntpath
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from ctypes import wintypes
@@ -18,6 +20,8 @@ logger = Logger.get_logger(__name__)
 
 WINDOWS_START_METHOD_START = 'start'
 WINDOWS_START_METHOD_OS_STARTFILE = 'os.startfile'
+_posix_mutex_file = None
+_caffeinate_process = None
 
 
 def is_admin():
@@ -40,6 +44,21 @@ def run_in_new_thread(func):
 
 
 def check_mutex():
+    if sys.platform != "win32":
+        import fcntl
+        import tempfile
+
+        global _posix_mutex_file
+        mutex_name = hashlib.md5(os.path.abspath(os.getcwd()).encode()).hexdigest()
+        mutex_path = os.path.join(tempfile.gettempdir(), f"ok-script-{mutex_name}.lock")
+        _posix_mutex_file = open(mutex_path, "a+", encoding="utf-8")
+        try:
+            fcntl.flock(_posix_mutex_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            logger.error("Another instance of this application is already running")
+            return False
+
     _LPSECURITY_ATTRIBUTES = wintypes.LPVOID
     _BOOL = ctypes.c_int
     _DWORD = ctypes.c_ulong
@@ -85,6 +104,8 @@ def check_mutex():
 
 
 def restart_as_admin():
+    if sys.platform != "win32":
+        return False
     import ctypes
     if ctypes.windll.shell32.IsUserAnAdmin() == 0:
         import sys
@@ -93,6 +114,8 @@ def restart_as_admin():
 
 
 def all_pids() -> list[int]:
+    if sys.platform != "win32":
+        return psutil.pids()
     pidbuffer = 512
     bytes_written = ctypes.c_uint32()
     while True:
@@ -174,6 +197,31 @@ def _split_game_command(game_cmd: str, game_path: str, arguments=None):
 
 def execute(game_cmd: str, arguments=None, start_method=WINDOWS_START_METHOD_START):
     if game_cmd:
+        if sys.platform == "darwin" and not re.match(r"^[A-Za-z]:[\\/]", game_cmd):
+            try:
+                if "://" in game_cmd:
+                    subprocess.Popen(
+                        ["open", game_cmd],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return True
+                game_path = get_path(game_cmd)
+                if not os.path.exists(game_path):
+                    logger.error(f"execute error path not exist {game_path}")
+                    return False
+                command = ["open", game_path]
+                if arguments:
+                    command.extend(["--args", *str(arguments).split()])
+                subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except Exception as e:
+                logger.error("execute error", e)
+                return False
         if '://' in game_cmd:
             try:
                 logger.info(f'try execute url {game_cmd}')
@@ -186,7 +234,11 @@ def execute(game_cmd: str, arguments=None, start_method=WINDOWS_START_METHOD_STA
             if os.path.exists(game_path):
                 try:
                     logger.info(f'try execute {game_cmd} {arguments} with {start_method}')
-                    working_dir = os.path.dirname(game_path)
+                    working_dir = (
+                        ntpath.dirname(game_path)
+                        if re.match(r"^[A-Za-z]:[\\/]", game_path)
+                        else os.path.dirname(game_path)
+                    )
 
                     if start_method == WINDOWS_START_METHOD_OS_STARTFILE:
                         _, args_part = _split_game_command(game_cmd, game_path, arguments)
@@ -465,5 +517,17 @@ def create_shortcut(exe_path=None, shortcut_name_post=None, description=None, ta
 
 
 def prevent_sleeping(yes=True):
-    # Prevent the system from sleeping
+    # Prevent the system from sleeping.
+    if sys.platform == "darwin":
+        global _caffeinate_process
+        if yes and (_caffeinate_process is None or _caffeinate_process.poll() is not None):
+            _caffeinate_process = subprocess.Popen(
+                ["caffeinate", "-dimsu"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        elif not yes and _caffeinate_process is not None:
+            _caffeinate_process.terminate()
+            _caffeinate_process = None
+        return
     ctypes.windll.kernel32.SetThreadExecutionState(0x80000002 if yes else 0x80000000)

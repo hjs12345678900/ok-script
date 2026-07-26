@@ -781,6 +781,9 @@ class OCR(FindFeature):
             image = frame
         else:
             image = self.executor.frame
+        if image is None:
+            logger.warning("OCR skipped because capture returned no frame")
+            return []
         frame_height, frame_width = image.shape[0], image.shape[1]
         if image is None:
             raise Exception("ocr no frame")

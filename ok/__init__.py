@@ -3,7 +3,7 @@ import hashlib
 import importlib
 import logging
 import os
-import platform
+import platform as py_platform
 import sys
 import threading
 import time
@@ -30,11 +30,14 @@ if TYPE_CHECKING:
         DesktopDuplicationCaptureMethod,
         ForegroundBitBltCaptureMethod,
         ImageCaptureMethod,
+        MacScreenCaptureMethod,
+        MacWindow,
         NemuIpcCaptureMethod,
         WindowsGraphicsCaptureMethod,
     )
     from ok.device.interaction import (
         BaseInteraction,
+        MacForegroundInteraction,
         BrowserInteraction,
         DoNothingInteraction,
         ForegroundPostMessageInteraction,
@@ -118,6 +121,7 @@ _LAZY_IMPORTS = {
     'GenshinInteraction': ('ok.device.interaction', 'GenshinInteraction'),
     'ForegroundPostMessageInteraction': ('ok.device.interaction', 'ForegroundPostMessageInteraction'),
     'PyDirectInteraction': ('ok.device.interaction', 'PyDirectInteraction'),
+    'MacForegroundInteraction': ('ok.device.interaction', 'MacForegroundInteraction'),
     'ImageCaptureMethod': ('ok.device.capture', 'ImageCaptureMethod'),
     'BaseCaptureMethod': ('ok.device.capture', 'BaseCaptureMethod'),
     'BrowserCaptureMethod': ('ok.device.capture', 'BrowserCaptureMethod'),
@@ -127,6 +131,8 @@ _LAZY_IMPORTS = {
     'NemuIpcCaptureMethod': ('ok.device.capture', 'NemuIpcCaptureMethod'),
     'DesktopDuplicationCaptureMethod': ('ok.device.capture', 'DesktopDuplicationCaptureMethod'),
     'ForegroundBitBltCaptureMethod': ('ok.device.capture', 'ForegroundBitBltCaptureMethod'),
+    'MacScreenCaptureMethod': ('ok.device.capture', 'MacScreenCaptureMethod'),
+    'MacWindow': ('ok.device.capture', 'MacWindow'),
     'DiagnosisTask': ('ok.task.DiagnosisTask', 'DiagnosisTask'),
     'BaseTask': ('ok.task.task', 'BaseTask'),
     'TriggerTask': ('ok.task.task', 'TriggerTask'),
@@ -551,16 +557,17 @@ class OK:
         register_launcher(self.global_config, pyappify)
         og.global_config = self.global_config
         og.set_use_dml()
-        try:
-            import ctypes
-            # Set DPI Awareness (Windows 10 and 8)
-            errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            logger.info(f'SetProcessDpiAwareness {errorCode}')
-            if self.debug:
-                import win32api
-                win32api.SetConsoleCtrlHandler(self.console_handler, True)
-        except Exception as e:
-            logger.error(f'SetProcessDpiAwareness error', e)
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                # Set DPI Awareness (Windows 10 and 8)
+                errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                logger.info(f'SetProcessDpiAwareness {errorCode}')
+                if self.debug:
+                    import win32api
+                    win32api.SetConsoleCtrlHandler(self.console_handler, True)
+            except Exception as e:
+                logger.error(f'SetProcessDpiAwareness error', e)
         self.config = config
         try:
             self.do_init()
@@ -951,7 +958,7 @@ class OkGlobals:
         elif use_dml_txt_option == 'Yes':
             use_dml = True
         if use_dml:
-            window_build_number_str = platform.version().split(".")[-1]
+            window_build_number_str = py_platform.version().split(".")[-1]
             window_build_number = int(window_build_number_str) if window_build_number_str.isdigit() else 0
             use_dml = window_build_number >= 18362
         logger.info(f'use_dml result is {use_dml}')
