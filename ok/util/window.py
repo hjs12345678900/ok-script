@@ -7,15 +7,17 @@ import sys
 import time
 
 import psutil
-import win32api
-import win32con
-import win32gui
-import win32process
+
+if sys.platform == "win32":
+    import win32api
+    import win32con
+    import win32gui
+    import win32process
 
 from ok.util.logger import Logger
 
 MDT_EFFECTIVE_DPI = 0
-user32 = ctypes.WinDLL('user32', use_last_error=True)
+user32 = ctypes.WinDLL('user32', use_last_error=True) if sys.platform == "win32" else None
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 WGC_NO_BORDER_MIN_BUILD = 20348
 WGC_MIN_BUILD = 19041
@@ -23,6 +25,27 @@ WGC_MIN_BUILD = 19041
 logger = Logger.get_logger("capture")
 
 WINDOWS_BUILD_NUMBER = int(platform.version().split(".")[-1]) if sys.platform == "win32" else -1
+
+
+def get_cursor_position():
+    """Return the global cursor position on the current desktop."""
+    if sys.platform == "win32":
+        return win32api.GetCursorPos()
+    from PySide6.QtGui import QCursor
+
+    point = QCursor.pos()
+    return point.x(), point.y()
+
+
+def set_cursor_position(position):
+    """Move the global cursor using the platform's native Qt integration."""
+    x, y = position
+    if sys.platform == "win32":
+        win32api.SetCursorPos((round(x), round(y)))
+        return
+    from PySide6.QtGui import QCursor
+
+    QCursor.setPos(round(x), round(y))
 
 
 def windows_graphics_available():

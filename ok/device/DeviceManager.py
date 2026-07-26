@@ -1,15 +1,14 @@
 import os
 import re
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
 
-from ok.device.capture import HwndWindow, BrowserCaptureMethod, update_capture_method, NemuIpcCaptureMethod, \
-    ADBCaptureMethod
-from ok.device.interaction import PostMessageInteraction, GenshinInteraction, ForegroundPostMessageInteraction, \
-    PynputInteraction, PyDirectInteraction, BrowserInteraction, ADBInteraction
+from ok.device.capture import ADBCaptureMethod, NemuIpcCaptureMethod
+from ok.device.interaction import ADBInteraction
 from ok.gui.Communicate import communicate
 from ok.util.collection import parse_ratio
 from ok.util.config import Config
@@ -17,7 +16,25 @@ from ok.util.file import delete_if_exists
 from ok.util.handler import Handler
 from ok.util.logger import Logger
 from ok.util.process import kill_exe
-from ok.util.window import windows_graphics_available, find_hwnd
+if sys.platform == "win32":
+    from ok.device.capture import (
+        BrowserCaptureMethod,
+        HwndWindow,
+        update_capture_method,
+    )
+    from ok.device.interaction import (
+        BrowserInteraction,
+        ForegroundPostMessageInteraction,
+        GenshinInteraction,
+        PostMessageInteraction,
+        PyDirectInteraction,
+        PynputInteraction,
+    )
+    from ok.util.window import find_hwnd, windows_graphics_available
+elif sys.platform == "darwin":
+    from ok.device.capture import MacScreenCaptureMethod, MacWindow
+    from ok.device.interaction import MacForegroundInteraction
+    from ok.util.window import find_hwnd, windows_graphics_available
 
 logger = Logger.get_logger(__name__)
 
@@ -39,6 +56,7 @@ class DeviceManager:
             'supported_resolution', {})
         self.supported_ratio = parse_ratio(supported_resolution.get('ratio'))
         self.windows_capture_config = app_config.get('windows')
+        self.macos_capture_config = app_config.get('macos')
         self.adb_capture_config = app_config.get('adb')
         self.browser_config = app_config.get('browser')
         self.debug = app_config.get('debug')
@@ -46,13 +64,15 @@ class DeviceManager:
         self.device_dict = {}
         self.exit_event = exit_event
         self.resolution_dict = {}
-        default_capture = 'windows' if app_config.get('windows') else (
+        default_capture = 'macos' if self.macos_capture_config and sys.platform == "darwin" else (
+            'windows' if app_config.get('windows') else (
             'browser' if app_config.get('browser') else 'adb')
+        )
         self.config = Config("devices",
                              {"preferred": "", "pc_full_path": "", 'capture': default_capture, 'selected_exe': '',
                               'selected_hwnd': 0, 'interaction': ''})
         self.handler = Handler(exit_event, 'RefreshAdb')
-        if self.windows_capture_config is not None:
+        if self.windows_capture_config is not None and sys.platform == "win32":
             if isinstance(self.windows_capture_config.get('exe'), str):
                 self.windows_capture_config['exe'] = [self.windows_capture_config.get('exe')]
 
@@ -97,6 +117,16 @@ class DeviceManager:
                 self.win_interaction_class = selected_interaction
             else:
                 self.win_interaction_class = PynputInteraction
+        elif self.macos_capture_config is not None and sys.platform == "darwin":
+            self.hwnd_window = MacWindow(
+                exit_event,
+                bundle_id=self.macos_capture_config.get("bundle_id"),
+                title=self.macos_capture_config.get("title"),
+                owner_name=self.macos_capture_config.get("owner_name"),
+                global_config=self.global_config,
+                device_manager=self,
+            )
+            self.win_interaction_class = MacForegroundInteraction
         else:
             self.hwnd_window = None
 
@@ -183,7 +213,7 @@ class DeviceManager:
             device_type = d.get('device')
             if device_type == 'adb':
                 return 0
-            if device_type == 'windows':
+            if device_type in ('windows', 'macos'):
                 return 1
             if device_type == 'browser':
                 return 2
@@ -192,12 +222,40 @@ class DeviceManager:
 
     def _replace_pc_devices(self, pc_devices):
         """Replace window records from the previous Windows enumeration."""
-        old_pc_keys = [key for key in self.device_dict if key == 'pc' or key.startswith('pc_')]
+        old_pc_keys = [
+            key
+            for key in self.device_dict
+            if key in ("pc", "mac") or key.startswith(("pc_", "mac_"))
+        ]
         for key in old_pc_keys:
             del self.device_dict[key]
         self.device_dict.update(pc_devices)
 
     def update_pc_device(self):
+        if getattr(self, "macos_capture_config", None) is not None and sys.platform == "darwin":
+            self.hwnd_window.do_update_window_size()
+            window = self.hwnd_window
+            imei = f"mac_{window.window_id}" if window.window_id else "mac"
+            nick = window.title or window.owner_name or "macOS game"
+            pc_device = {
+                "address": "",
+                "imei": imei,
+                "device": "macos",
+                "model": "",
+                "nick": nick,
+                "width": window.width,
+                "height": window.height,
+                "hwnd": nick,
+                "capture": "macos",
+                "connected": window.exists,
+                "full_path": None,
+                "real_hwnd": window.window_id,
+                "bundle_id": window.bundle_id,
+            }
+            if window.width and window.height:
+                pc_device["resolution"] = f"{window.width}x{window.height}"
+            self._replace_pc_devices({imei: pc_device})
+            return imei
         if self.windows_capture_config is not None:
             if not self.windows_capture_config.get('exe') and not self.windows_capture_config.get('hwnd_class') and not self.windows_capture_config.get('title'):
                 from ok.util.window import find_all_visible_windows, get_window_bounds
@@ -252,7 +310,7 @@ class DeviceManager:
             return imei
 
     def update_browser_device(self):
-        if self.browser_config and windows_graphics_available():
+        if self.browser_config and sys.platform == "win32" and windows_graphics_available():
             width, height = self.browser_config.get('resolution', (1280, 720))
             nick = self.browser_config.get('nick', 'Browser')
             connected = False
@@ -329,7 +387,7 @@ class DeviceManager:
         logger.debug(f'refresh_phones done')
 
     def refresh_emulators(self, current=False):
-        if self.adb_capture_config is None:
+        if self.adb_capture_config is None or sys.platform != "win32":
             return
         from ok.alas.emulator_windows import EmulatorManager
         manager = EmulatorManager()
@@ -514,6 +572,15 @@ class DeviceManager:
 
     def set_interaction(self, interaction):
         interaction_name = interaction.__name__ if isinstance(interaction, type) else interaction
+
+        if sys.platform == "darwin":
+            self.win_interaction_class = (
+                interaction if isinstance(interaction, type) else MacForegroundInteraction
+            )
+            if self.config.get("interaction") != interaction_name:
+                self.config["interaction"] = interaction_name
+                self.start()
+            return
         
         config_interaction = self.windows_capture_config.get('interaction') if self.windows_capture_config else None
         if isinstance(interaction, str):
@@ -567,6 +634,18 @@ class DeviceManager:
             if self.interaction:
                 self.interaction.capture = self.capture_method
 
+    def use_macos_capture(self):
+        if not isinstance(self.capture_method, MacScreenCaptureMethod):
+            if self.capture_method is not None:
+                self.capture_method.close()
+            self.capture_method = MacScreenCaptureMethod(
+                self.hwnd_window,
+                self.exit_event,
+                fps=self.macos_capture_config.get("fps", 30),
+            )
+        if self.interaction:
+            self.interaction.capture = self.capture_method
+
     def start(self):
         self.handler.post(self.do_start, remove_existing=True, skip_if_running=True)
 
@@ -578,7 +657,22 @@ class DeviceManager:
                 self.set_preferred_device()
             return
 
-        if preferred['device'] == 'windows':
+        if preferred['device'] == 'macos':
+            self.hwnd_window.update_window(
+                title=self.macos_capture_config.get("title"),
+                bundle_id=self.macos_capture_config.get("bundle_id"),
+                owner_name=self.macos_capture_config.get("owner_name"),
+            )
+            self.use_macos_capture()
+            if not isinstance(self.interaction, MacForegroundInteraction):
+                self.interaction = MacForegroundInteraction(
+                    self.capture_method,
+                    self.hwnd_window,
+                )
+            else:
+                self.interaction.capture = self.capture_method
+            preferred["connected"] = self.hwnd_window.exists
+        elif preferred['device'] == 'windows':
             title = self.windows_capture_config.get('title')
             exe = self.windows_capture_config.get('exe')
             if not exe and not title and preferred.get('real_hwnd'):
@@ -703,7 +797,7 @@ class DeviceManager:
 
     def device_connected(self):
         preferred = self.get_preferred_device()
-        if preferred['device'] == 'windows' or preferred['device'] == 'browser':
+        if preferred['device'] in ('windows', 'macos', 'browser'):
             return True
         elif self.device is not None:
             try:
@@ -715,6 +809,8 @@ class DeviceManager:
 
     def get_exe_path(self, device):
         path = device.get('full_path')
+        if device.get("device") == "macos":
+            return path if path and os.path.exists(path) else None
         if device.get(
                 'device') == 'windows' and self.windows_capture_config:
             if not path or path == "none":

@@ -217,6 +217,11 @@ class FeatureSet:
         if mat is None:
             return []
         start_time = time.time()
+        if mat is None:
+            logger.warning(
+                f"FeatureSet: skip {category_name} because capture returned no frame"
+            )
+            return []
         self.check_size(mat)
         check_size_time = time.time()
 

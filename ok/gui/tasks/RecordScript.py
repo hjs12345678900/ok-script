@@ -1,6 +1,8 @@
 import time
+import sys
 
-import win32gui
+if sys.platform == "win32":
+    import win32gui
 from pynput import mouse, keyboard
 
 from ok import og
@@ -88,7 +90,7 @@ class Recorder:
                 width = hw.real_width or hw.width
                 height = hw.real_height or hw.height
                 return self.normalize_coords(rel_x, rel_y, width, height)
-            if self.target_hwnd:
+            if self.target_hwnd and sys.platform == "win32":
                 # ClientToScreen with (0,0) gives the top-left of the content area in screen coordinates
                 client_pos = win32gui.ClientToScreen(self.target_hwnd, (0, 0))
                 left, top, right, bottom = win32gui.GetClientRect(self.target_hwnd)

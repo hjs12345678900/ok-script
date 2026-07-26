@@ -1,5 +1,6 @@
 import os
 import queue
+import sys
 import threading
 import time
 from datetime import datetime
@@ -13,11 +14,45 @@ from ok import Box, og
 from ok import Logger
 from ok.gui.Communicate import communicate
 from ok.util.blur import apply_blur_areas, get_blur_algorithm
-from ok.util.file import find_first_existing_file, clear_folder, sanitize_filename, \
-    get_relative_path
+from ok.util.file import clear_folder, sanitize_filename, get_relative_path
 
 logger = Logger.get_logger(__name__)
 _CLEANUP_FOLDERS = object()
+
+
+def find_annotation_font():
+    """Return a readable system font without assuming a Windows installation."""
+    candidates = []
+    windows_dir = os.environ.get("WINDIR")
+    if windows_dir:
+        candidates.extend(
+            os.path.join(windows_dir, "Fonts", filename)
+            for filename in (
+                "msyh.ttc",
+                "msyh.ttf",
+                "simsun.ttf",
+                "simsun.ttc",
+                "arial.ttf",
+                "arial.ttc",
+            )
+        )
+    if sys.platform == "darwin":
+        candidates.extend(
+            (
+                "/System/Library/Fonts/Hiragino Sans GB.ttc",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+            )
+        )
+    else:
+        candidates.extend(
+            (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            )
+        )
+    return next((path for path in candidates if os.path.isfile(path)), None)
 
 
 class Screenshot(QObject):
@@ -47,10 +82,8 @@ class Screenshot(QObject):
             self.exit_event.bind_queue(self.task_queue)
             self.thread = threading.Thread(target=self._worker, name="screenshot")
             self.thread.start()
-            fonts_dir = os.path.join(os.environ['WINDIR'], 'Fonts')
-            font = find_first_existing_file(
-                ['msyh.ttc', 'msyh.ttf', 'simsun.ttf', 'simsun.ttc', 'arial.ttf', 'arial.ttc'], fonts_dir)
-            if os.path.exists(font):
+            font = find_annotation_font()
+            if font:
                 logger.debug(f"load font {font}")
                 self.pil_font = ImageFont.truetype(font, 30)
             else:

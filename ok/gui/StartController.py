@@ -1,10 +1,16 @@
+import sys
 import time
 
 from PySide6.QtCore import QObject
 
 from ok import Handler, og
 from ok import Logger
-from ok.device.capture import BaseWindowsCaptureMethod, BrowserCaptureMethod
+from ok.device.capture import BaseWindowsCaptureMethod
+
+if sys.platform == "win32":
+    from ok.device.capture import BrowserCaptureMethod
+else:
+    BrowserCaptureMethod = ()
 from ok.gui.Communicate import communicate
 from ok.gui.util.Alert import alert_error
 from ok.util.process import is_admin, execute, WINDOWS_START_METHOD_START
@@ -98,6 +104,14 @@ class StartController(QObject):
                 if exit_after:
                     task.exit_after_task = True
 
+            if not self._activate_interaction():
+                communicate.starting_emulator.emit(
+                    True,
+                    self.tr("Failed to activate the game window."),
+                    0,
+                )
+                return False
+
             for task in tasks_to_enable:
                 self._mark_task_enabled(task)
 
@@ -108,6 +122,24 @@ class StartController(QObject):
             logger.error(f'do_start exception: {e}', e)
             communicate.starting_emulator.emit(True, self.tr(f'Start failed: {e}'), 0)
             return False
+
+    @staticmethod
+    def _activate_interaction():
+        """Prepare the selected input backend before the executor starts."""
+        interaction = getattr(og.executor, "interaction", None)
+        if interaction is None:
+            logger.warning("No interaction backend is available to activate")
+            return True
+        try:
+            result = interaction.on_run()
+        except Exception as e:
+            logger.error(f"Failed to activate the interaction backend: {e}", e)
+            return False
+        if result is False:
+            logger.error("The interaction backend could not activate the game window")
+            return False
+        logger.info("Interaction backend prepared for task execution")
+        return True
 
     def _wait_until_device_ready(self, refresh_first=True):
         wait_until = time.time() + self.start_timeout

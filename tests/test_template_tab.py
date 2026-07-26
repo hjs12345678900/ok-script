@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -98,6 +99,10 @@ class TestTemplateTabCardCollection(unittest.TestCase):
         self.assertEqual([second_path], self.tab._visible_image_paths)
         self.assertIs(second_card, self.tab._cards_by_path[second_path])
 
+    @unittest.skipIf(
+        sys.platform == "darwin",
+        "qframelesswindow crashes with Qt's offscreen plugin on macOS",
+    )
     def test_markup_close_emits_the_editor_coco_data(self):
         editor = MarkUpWindow('', [])
         expected_coco = {'images': [], 'annotations': [], 'categories': []}

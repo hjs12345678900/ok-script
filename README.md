@@ -26,17 +26,71 @@
 ![image_template](docs/ok_py/image_template.png)
 ![image_markup](docs/ok_py/image_markup.png)
 
-### 使用 推荐使用Python 3.12
+## 安装
 
-* 在你的项目中通过pip依赖使用
-```commandline
-pip install ok-script
+推荐使用 **Python 3.12**。`ok-script` 支持 Python 3.11 及以上版本。
+
+### 作为项目依赖安装
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install ok-script
 ```
 
-* 编译国际化文件
-```commandline
+建议在虚拟环境中安装，避免与系统 Python 的依赖冲突：
+
+```bash
+python3.12 -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install ok-script
+```
+
+### 从源码安装（开发者）
+
+```bash
+git clone https://github.com/ok-oldking/ok-script.git
+cd ok-script
+python3.12 -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+运行测试：
+
+```bash
+python -m pytest
+```
+
+编译国际化文件（Windows）：
+
+```bat
 compile_i18n.cmd
 ```
+
+### macOS 支持
+
+macOS 后端目前面向开发和实机验证，提供 ScreenCaptureKit 窗口捕获及 Quartz 前台键鼠输入。首次使用前：
+
+1. 安装 Xcode Command Line Tools，以便开发模式首次运行时用 `swiftc` 编译原生辅助程序。
+2. 在“系统设置 → 隐私与安全性”中，给启动 Python 的终端或应用授予“屏幕与系统音频录制”和“辅助功能”权限。
+3. 授权后完全退出并重新启动终端或应用，使权限生效。
+
+macOS 输入仅在目标应用位于前台时发送；目前不承诺最小化或后台输入。
 
 ## 文档和示例代码
 

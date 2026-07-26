@@ -1,5 +1,14 @@
 import os
+import sys
 import unittest
+
+import pytest
+
+if sys.platform == "darwin":
+    pytest.skip(
+        "qframelesswindow crashes with Qt's offscreen plugin on macOS",
+        allow_module_level=True,
+    )
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

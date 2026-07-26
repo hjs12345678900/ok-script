@@ -1,5 +1,11 @@
+import sys
 import unittest
 from unittest.mock import Mock, patch
+
+import pytest
+
+if sys.platform != "win32":
+    pytest.skip("Windows capture backend only", allow_module_level=True)
 
 import ok.device.capture_methods.update as capture_update
 

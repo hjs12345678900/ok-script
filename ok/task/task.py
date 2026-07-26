@@ -586,6 +586,7 @@ class FindFeature(ExecutorOperation):
                      mask_function=None, frame=None, limit=0, target_height=0) -> List[Box]:
         image = frame if frame is not None else self.executor.frame
         if image is None:
+            logger.warning("OCR skipped because capture returned no frame")
             return []
         if box and isinstance(box, str):
             box = self.get_box_by_name(box)

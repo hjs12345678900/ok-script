@@ -1,10 +1,14 @@
+import sys
 import time
 
 from PySide6.QtCore import QObject, Signal, Qt, QTimer
 
 from ok import Logger
 from ok import og
-from ok.device.capture import HwndWindow
+if sys.platform == "darwin":
+    from ok.device.capture import MacWindow as HwndWindow
+else:
+    from ok.device.capture import HwndWindow
 from ok.gui.Communicate import communicate
 from ok.gui.debug.OverlayWidget import OverlayWidget
 

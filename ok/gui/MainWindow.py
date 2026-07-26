@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 
 import pyappify
@@ -181,7 +182,10 @@ class MainWindow(FluentWindow):
         communicate.task_list_updated.connect(self.update_imported_tabs)
 
         # 添加计划任务Tab
-        any_support_schedule = any(task.support_schedule_task for task in visible_onetime_tasks)
+        any_support_schedule = (
+            sys.platform == "win32"
+            and any(task.support_schedule_task for task in visible_onetime_tasks)
+        )
         if any_support_schedule:
             from ok.gui.tasks.ScheduleTaskTab import ScheduleTaskTab
             self.schedule_tab = ScheduleTaskTab(config=self.config)
@@ -236,6 +240,9 @@ class MainWindow(FluentWindow):
     @staticmethod
     def _get_dwm_accent_color():
         """Return the DWM accent color as a compatibility fallback."""
+        if sys.platform != "win32":
+            return None
+
         try:
             import ctypes
             from ctypes import wintypes
@@ -260,6 +267,9 @@ class MainWindow(FluentWindow):
 
     def get_system_primary_theme_color(self):
         """Return a qfluent source color matching the Windows primary fill."""
+        if sys.platform != "win32":
+            return None
+
         dark = isDarkTheme()
         try:
             from ok.rotypes.Windows.UI.ViewManagement import UIColorType, get_color_value
@@ -336,23 +346,24 @@ class MainWindow(FluentWindow):
         QTimer.singleShot(250, self._apply_system_theme_change)
 
     def nativeEvent(self, event_type, message):
-        try:
-            import ctypes
-            from ctypes import wintypes
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                from ctypes import wintypes
 
-            native_message = wintypes.MSG.from_address(int(message))
-            if native_message.message == 0x0320:  # WM_DWMCOLORIZATIONCOLORCHANGED
-                logger.info('System colorization colors changed')
-                self._schedule_system_theme_change()
-            elif (
-                native_message.message == 0x001A  # WM_SETTINGCHANGE
-                and native_message.lParam
-                and ctypes.wstring_at(native_message.lParam) == "ImmersiveColorSet"
-            ):
-                logger.info('System theme changed')
-                self._schedule_system_theme_change()
-        except (OSError, TypeError, ValueError) as e:
-            logger.error('Failed to process Windows theme change', e)
+                native_message = wintypes.MSG.from_address(int(message))
+                if native_message.message == 0x0320:  # WM_DWMCOLORIZATIONCOLORCHANGED
+                    logger.info('System colorization colors changed')
+                    self._schedule_system_theme_change()
+                elif (
+                    native_message.message == 0x001A  # WM_SETTINGCHANGE
+                    and native_message.lParam
+                    and ctypes.wstring_at(native_message.lParam) == "ImmersiveColorSet"
+                ):
+                    logger.info('System theme changed')
+                    self._schedule_system_theme_change()
+            except (OSError, TypeError, ValueError) as e:
+                logger.error('Failed to process Windows theme change', e)
 
         return super().nativeEvent(event_type, message)
 
